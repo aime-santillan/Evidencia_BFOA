@@ -1,0 +1,74 @@
+services:
+  # -----------------------------------------------------
+  # 1. SERVIDOR WEB (Nginx)
+  # Actúa como proxy: sirve archivos estáticos y envía PHP a 'app:9000'
+  web:
+    image: nginx:stable-alpine
+    container_name: aero-web
+    ports:
+      - "80:80"
+    volumes:
+      # Vincula el código de Laravel desde el host
+      - .:/var/www/html
+      # Monta la configuración de Nginx para Laravel
+      - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf
+    # Nginx solo espera a que el servicio PHP (app) esté corriendo
+    depends_on:
+      - app
+
+  # -----------------------------------------------------
+  # 2. APLICACIÓN PHP (PHP-FPM Y VITE)
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: aero-app
+    volumes:
+      - .:/var/www/html
+    # AÑADIDO: Exponemos el puerto 5173 de Vite para acceso directo del navegador
+    # Aunque Nginx es el proxy principal, esto ayuda a evitar ERR_ADDRESS_INVALID
+    # cuando el navegador intenta conectarse directamente a Vite para HMR.
+    ports:
+      - "5173:5173"
+    environment:
+      DB_HOST: mysql
+      DB_DATABASE: aerodb
+      DB_USERNAME: root
+      DB_PASSWORD: 1234
+    depends_on:
+      mysql:
+        condition: service_healthy
+    command: >
+      sh -c "
+      composer install --no-interaction --prefer-dist &&
+      php artisan key:generate --force &&
+      php artisan storage:link &&
+      php-fpm
+      "
+  # -----------------------------------------------------
+  # 3. BASE DE DATOS (MYSQL)
+  mysql:
+    image: mysql:8.0
+    container_name: aero-mysql
+    restart: always
+    environment:
+      # La base de datos que tu aplicación usa
+      MYSQL_DATABASE: aerodb
+      # La contraseña que usará el usuario 'root' (debe coincidir con DB_PASSWORD en .env)
+      MYSQL_ROOT_PASSWORD: 1234
+      # Variables opcionales para un usuario menos privilegiado
+      MYSQL_PASSWORD: 1234
+    volumes:
+      # Persistencia de datos: los datos de la DB se guardan aquí
+      - dbdata:/var/lib/mysql
+
+    # Define cómo Docker comprueba si el servicio está listo
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      timeout: 20s
+      retries: 10
+      interval: 3s
+
+# Define el volumen para la persistencia de datos
+volumes:
+  dbdata:

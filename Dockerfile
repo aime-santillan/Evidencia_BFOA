@@ -34,11 +34,16 @@ RUN apt-get update && apt-get install -y \
 
 # Configura e instala las extensiones de PHP
 RUN docker-php-ext-configure gd --with-freetype --with-jpeg \
-    && docker-php-ext-install pdo pdo_mysql mysqli zip gd
+    && docker-php-ext-install pdo pdo_mysql mysqli zip gd\
+
+#archivos de configuracion
+COPY docker/php/custom.ini /usr/local/etc/php/conf.d/custom.ini
+COPY docker/php-fpm/www.conf /usr/local/etc/php-fpm.d/zzz-custom.conf
 
 # Copia el código de tu aplicación al directorio de trabajo del contenedor
 # Nota: La vinculación (mount) en Compose hará que esto sea menos crítico, pero es una buena práctica.
 COPY . /var/www/html/
+
 
 # Por defecto, la imagen php:apache ya configura el puerto 80.
 EXPOSE 80
